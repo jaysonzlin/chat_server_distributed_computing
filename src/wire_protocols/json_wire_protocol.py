@@ -64,7 +64,6 @@ class WireProtocol:
 def create_account_username_request_msg(username: str) -> Dict[str, Any]:
     """Create a request message for checking username availability."""
     return {
-        "protocol_version": 1,
         "op_code": "create_account_username",
         "payload": {
             "username": username
@@ -74,7 +73,6 @@ def create_account_username_request_msg(username: str) -> Dict[str, Any]:
 def create_account_password_request_msg(username: str, password: str) -> Dict[str, Any]:
     """Create a request message for creating an account with password."""
     return {
-        "protocol_version": 1,
         "op_code": "create_account_password",
         "payload": {
             "username": username,
@@ -85,7 +83,6 @@ def create_account_password_request_msg(username: str, password: str) -> Dict[st
 def login_request_msg(username: str, password: str) -> Dict[str, Any]:
     """Create a login request message."""
     return {
-        "protocol_version": 1,
         "op_code": "login",
         "payload": {
             "username": username,
@@ -96,7 +93,6 @@ def login_request_msg(username: str, password: str) -> Dict[str, Any]:
 def send_message_request_msg(sender: str, recipient: str, message: str) -> Dict[str, Any]:
     """Create a request message for sending a message."""
     return {
-        "protocol_version": 1,
         "op_code": "send_message",
         "payload": {
             "sender": sender,
@@ -108,7 +104,6 @@ def send_message_request_msg(sender: str, recipient: str, message: str) -> Dict[
 def retrieve_unread_count_request_msg(username: str) -> Dict[str, Any]:
     """Create a request message for retrieving unread message count."""
     return {
-        "protocol_version": 1,
         "op_code": "retrieve_unread_count",
         "payload": {
             "username": username
@@ -118,7 +113,6 @@ def retrieve_unread_count_request_msg(username: str) -> Dict[str, Any]:
 def load_unread_messages_request_msg(username: str, number_of_messages: int = 10) -> Dict[str, Any]:
     """Create a request message for loading unread messages."""
     return {
-        "protocol_version": 1,
         "op_code": "load_unread_messages",
         "payload": {
             "username": username,
@@ -129,7 +123,6 @@ def load_unread_messages_request_msg(username: str, number_of_messages: int = 10
 def load_read_messages_request_msg(username: str, number_of_messages: int = 10) -> Dict[str, Any]:
     """Create a request message for loading read messages."""
     return {
-        "protocol_version": 1,
         "op_code": "load_read_messages",
         "payload": {
             "username": username,
@@ -140,7 +133,6 @@ def load_read_messages_request_msg(username: str, number_of_messages: int = 10) 
 def delete_messages_request_msg(username: str, message_ids: List[str]) -> Dict[str, Any]:
     """Create a request message for deleting messages."""
     return {
-        "protocol_version": 1,
         "op_code": "delete_messages",
         "payload": {
             "username": username,
@@ -151,7 +143,6 @@ def delete_messages_request_msg(username: str, message_ids: List[str]) -> Dict[s
 def delete_account_request_msg(username: str) -> Dict[str, Any]:
     """Create a request message for deleting an account."""
     return {
-        "protocol_version": 1,
         "op_code": "delete_account",
         "payload": {
             "username": username
@@ -161,7 +152,6 @@ def delete_account_request_msg(username: str) -> Dict[str, Any]:
 def list_accounts_request_msg() -> Dict[str, Any]:
     """Create a request message for listing all accounts."""
     return {
-        "protocol_version": 1,
         "op_code": "list_accounts",
         "payload": {}
     }
@@ -169,7 +159,6 @@ def list_accounts_request_msg() -> Dict[str, Any]:
 def quit_request_msg(username: str) -> Dict[str, Any]:
     """Create a request message for quitting/logging out."""
     return {
-        "protocol_version": 1,
         "op_code": "quit",
         "payload": {
             "username": username
@@ -192,7 +181,6 @@ def error_response_msg(message: str) -> Dict[str, Any]:
         message: The error message to send.
     """
     return {
-        "protocol_version": 1,
         "op_code": "error",
         "payload": {
             "message": message
@@ -207,7 +195,6 @@ def ok_response_msg(message: str = "Operation successful.") -> Dict[str, Any]:
         message: Optional success message.
     """
     return {
-        "protocol_version": 1,
         "op_code": "ok",
         "payload": {
             "message": message
@@ -222,7 +209,6 @@ def exists_response_msg(message: str = "Resource already exists.") -> Dict[str, 
         message: Optional exists message.
     """
     return {
-        "protocol_version": 1,
         "op_code": "exists",
         "payload": {
             "message": message
@@ -234,7 +220,6 @@ def refresh_request_msg() -> Dict[str, Any]:
     Constructs a refresh request message.
     """
     return {
-        "protocol_version": 1,
         "op_code": "refresh_request",
         "payload": {}
     }
@@ -247,7 +232,6 @@ def unread_count_response_msg(count: int) -> Dict[str, Any]:
         count: The number of unread messages.
     """
     return {
-        "protocol_version": 1,
         "op_code": "ok",
         "payload": {
             "count": count
@@ -262,7 +246,6 @@ def messages_response_msg(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         messages: List of message objects.
     """
     return {
-        "protocol_version": 1,
         "op_code": "ok",
         "payload": {
             "messages": messages
@@ -277,7 +260,6 @@ def account_list_response_msg(accounts: List[str]) -> Dict[str, Any]:
         accounts: List of usernames.
     """
     return {
-        "protocol_version": 1,
         "op_code": "ok",
         "payload": {
             "accounts": accounts
@@ -299,7 +281,7 @@ if __name__ == "__main__":
                 message = wp_server.receive()
                 print("[Server] Received:", message)
                 # Echo back a simple response with a status.
-                response = {"protocol_version": 1, "status": "ok", "op_code": message.get("op_code")}
+                response = {"status": "ok", "op_code": message.get("op_code")}
                 wp_server.send(response)
         except ConnectionError:
             print("[Server] Connection closed.")

@@ -21,13 +21,14 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_path not in sys.path:
     sys.path.append(backend_path)
 from src.wire_protocols.json_wire_protocol import (
-    WireProtocol, error_response_msg, ok_response_msg,
+    error_response_msg, ok_response_msg,
     create_account_username_request_msg, create_account_password_request_msg,
     login_request_msg, send_message_request_msg, retrieve_unread_count_request_msg,
     load_unread_messages_request_msg, load_read_messages_request_msg,
     delete_messages_request_msg, delete_account_request_msg,
-    list_accounts_request_msg, quit_request_msg
+   list_accounts_request_msg, quit_request_msg
 )
+from src.wire_protocols.custom_wire_protocol import WireProtocol
 
 class ChatClient:
     def __init__(self, host="127.0.0.1", port=5452):

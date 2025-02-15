@@ -1,13 +1,13 @@
-import json
+from src.logger import get_logger
 import socket
 import sys
 from typing import Any, Dict
 import os
 sys.path.append(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
-from backend.logger import get_logger
 
 logger = get_logger(__file__)
+
 
 def varint_encode(number: int) -> bytes:
     """
@@ -58,7 +58,9 @@ def varint_decode(data: bytes) -> int:
     # If we run out of bytes before finding a byte with the high bit clear,
     # the varint is incomplete.
     raise ValueError("Incomplete varint byte sequence.")
-# unique field names 
+
+
+# unique field names
 field_names = {
     "username": 0,
     "hashed_password": 1,
@@ -69,7 +71,7 @@ field_names = {
     "sender": 6,
     "message": 7,
     "read": 8,
-    "timestamp": 9, 
+    "timestamp": 9,
     "password": 10
 }
 
@@ -102,8 +104,8 @@ field_names_mapping = {
     "read": 8,
     "timestamp": 9,
     "number_of_messages": 10,
-    "message_ids": 11, 
-    "status": 12, 
+    "message_ids": 11,
+    "status": 12,
     "unread_count": 13
 }
 
@@ -118,12 +120,12 @@ op_code_to_fields = {
     "load_read_messages": ["username", "messages", "number_of_messages"],
     "delete_messages": ["username", "message_ids"],
     "delete_account": ["username"],
-    "list_accounts": [],  
+    "list_accounts": [],
     "quit": ["username"],
     "refresh_request": ["message"],  # Server push notification
-    "error": ["message"], 
+    "error": ["message"],
     "exists": ["message"],
-    "ok": ["message", "unread_count", "message_id", "messages", "deleted_message_ids", 
+    "ok": ["message", "unread_count", "message_id", "messages", "deleted_message_ids",
            "accounts"]
 }
 
@@ -140,10 +142,10 @@ op_code_to_number = {
     "delete_account": 9,
     "list_accounts": 10,
     "quit": 11,
-    "refresh_request": 12, 
-    "error": 13, 
-    "exists": 14, 
-    "ok": 15, 
+    "refresh_request": 12,
+    "error": 13,
+    "exists": 14,
+    "ok": 15,
     "refresh_request": 16
 }
 
@@ -158,31 +160,34 @@ def pack_two_nibbles(type_value, field_name_index):
     # Convert to bytes
     return bytes([byte_value])
 
+
 def unpack_two_nibbles(byte_value: bytes) -> tuple[int, int]:
     """
     Unpack a byte into two 4-bit numbers (nibbles).
-    
+
     Args:
         byte_value: A single byte containing two 4-bit numbers
-        
+
     Returns:
         A tuple of (type_value, field_name_index) where each is a 4-bit number (0-15)
     """
     if len(byte_value) != 1:
         raise ValueError("Input must be exactly one byte")
-        
+
     # Convert bytes to int and extract nibbles
     value = byte_value[0]
     type_value = (value >> 4) & 0x0F  # Get upper 4 bits
     field_name_index = value & 0x0F    # Get lower 4 bits
-    
+
     return (type_value, field_name_index)
+
 
 def get_fields(message):
     # Create a new dict excluding protocol_version and op_code
-    return {key: value for key, value in message.items() 
+    return {key: value for key, value in message.items()
             if key not in ['protocol_version', 'op_code']}
-    
+
+
 class WireProtocol:
     def recv_exact(self, n: int, timeout: float = 500000.0) -> bytes:
         """Ensure exactly n bytes are read from the socket with a timeout."""
@@ -192,12 +197,14 @@ class WireProtocol:
             while len(data) < n:
                 chunk = self.sock.recv(n - len(data))
                 if not chunk:
-                    raise ConnectionError("Socket closed while trying to read data.")
+                    raise ConnectionError(
+                        "Socket closed while trying to read data.")
                 data += chunk
             return data
         except socket.timeout:
-            raise TimeoutError(f"Timeout: Expected {n} bytes but only received {len(data)} bytes.")
-        
+            raise TimeoutError(
+                f"Timeout: Expected {n} bytes but only received {len(data)} bytes.")
+
     def __init__(self, sock: socket.socket) -> None:
         self.sock = sock
         self.recv_buffer = b""
@@ -205,60 +212,71 @@ class WireProtocol:
     def send(self, message: Dict[str, Any]) -> None:
         """
         Send a dictionary as bytes over the socket.
-    
+
         Args:
             message: The dictionary to send.
         """
         print(f"\n[SEND] Starting to send message: {message}")
         magic_number = (29).to_bytes(1, "big")
-        #protocol_version = varint_encode(message['protocol_version'])
+        # protocol_version = varint_encode(message['protocol_version'])
         print("[SEND] message['op_code'] is ", message["op_code"])
         op_code_number = op_code_to_number[message['op_code']]
         op_code = varint_encode(op_code_number)
-        print(f"[SEND] Op code: {message['op_code']} (number: {op_code_number}, encoded: {op_code})")
-        
+        print(
+            f"[SEND] Op code: {message['op_code']} (number: {op_code_number}, encoded: {op_code})")
+
         fields = get_fields(message['payload'])
         print(f"[SEND] Fields to encode: {fields}")
         field_data = b""
         for field in fields:
             value = fields[field]
-            print(f"\n[SEND] Processing field '{field}' with value: {value} (type: {type(value)})")
+            print(
+                f"\n[SEND] Processing field '{field}' with value: {value} (type: {type(value)})")
             if isinstance(value, int):
                 # For integers, encode as varint
-                field_data += pack_two_nibbles(0, field_names_reverse_mapping[field])
+                field_data += pack_two_nibbles(0,
+                                               field_names_reverse_mapping[field])
                 encoded_int = varint_encode(value)
                 num_bytes = len(encoded_int)
                 encoded_num_bytes = varint_encode(num_bytes)
                 field_data += encoded_num_bytes
                 field_data += encoded_int
-                print(f"[SEND] Encoded integer: {encoded_int}, length: {num_bytes} bytes")
+                print(
+                    f"[SEND] Encoded integer: {encoded_int}, length: {num_bytes} bytes")
             elif isinstance(value, str):
                 # For strings, encode length as varint followed by UTF-8 bytes
                 print(f"[SEND] String field '{field}' - Raw value: {value}")
                 field_data += pack_two_nibbles(1, field_names[field])
-                print(f"[SEND] Added type nibble (1) and field name index ({field_names[field]})")
+                print(
+                    f"[SEND] Added type nibble (1) and field name index ({field_names[field]})")
                 encoded_str = value.encode('utf-8')
                 print(f"[SEND] UTF-8 encoded string: {encoded_str}")
                 num_bytes = len(encoded_str)
                 encoded_num_bytes = varint_encode(num_bytes)
-                print(f"[SEND] String length {num_bytes} encoded as varint: {encoded_num_bytes}")
+                print(
+                    f"[SEND] String length {num_bytes} encoded as varint: {encoded_num_bytes}")
                 field_data += encoded_num_bytes
                 field_data += encoded_str
                 print(f"[SEND] Encoded string length: {num_bytes} bytes")
             elif isinstance(value, list) and all(isinstance(x, str) for x in value):
                 # For list of strings, first encode list length, then each string
-                field_data += pack_two_nibbles(2, field_names_reverse_mapping[field])
+                field_data += pack_two_nibbles(2,
+                                               field_names_reverse_mapping[field])
                 field_data += varint_encode(len(value))
                 for item in value:
                     encoded_item = item.encode('utf-8')
-                    field_data += varint_encode(len(encoded_item)) + encoded_item
+                    field_data += varint_encode(len(encoded_item)
+                                                ) + encoded_item
                 print(f"[SEND] Encoded list with {len(value)} items")
             else:
-                raise ValueError(f"Unsupported field type for {field}: {type(value)}")
+                raise ValueError(
+                    f"Unsupported field type for {field}: {type(value)}")
 
         payload_length = len(field_data)
+        payload_length_bytes = varint_encode(payload_length)
         print(f"\n[SEND] Total payload length: {payload_length} bytes")
-        custom_data = b"".join([magic_number, op_code, varint_encode(payload_length), field_data])
+        custom_data = b"".join(
+            [magic_number, op_code, payload_length_bytes, field_data])
         print(f"[SEND] Final message size: {len(custom_data)} bytes")
         self.sock.sendall(custom_data)
         print("[SEND] Message sent successfully\n")
@@ -278,13 +296,14 @@ class WireProtocol:
             if not magic_number_candidate:
                 print("[RECEIVE] Error: No data available for magic number")
                 raise Exception("No data available for magic number")
-        except Exception as e: 
+        except Exception as e:
             logger.error(f"[Client] Error: {e}")
             print(f"[RECEIVE] Client Error: {e}")
-            
+
         try:
             if magic_number_candidate != (29).to_bytes(1, "big"):
-                print(f"[RECEIVE] Invalid magic number received: {magic_number_candidate}")
+                print(
+                    f"[RECEIVE] Invalid magic number received: {magic_number_candidate}")
                 raise ConnectionError("Invalid magic number")
             else:
                 logger.info("Correct magic number!")
@@ -292,8 +311,8 @@ class WireProtocol:
         except ConnectionError as e:
             logger.error(f"[Client] ConnectionError: {e}")
             print(f"[RECEIVE] Connection Error: {e}")
-        
-        # protocol header 
+
+        # protocol header
         try:
             # protocol version (1 byte)
             decoded_message = {}
@@ -303,7 +322,7 @@ class WireProtocol:
             # protocol_version, _ = varint_decode(protocol_version_bytes)
             # logger.info(f"Protocol version: {protocol_version}")
             # decoded_message['protocol_version'] = protocol_version
-            
+
             # op code (1 byte)
             op_code_bytes = self.recv_exact(1)
             if not op_code_bytes:
@@ -312,46 +331,47 @@ class WireProtocol:
             op_code, _ = varint_decode(op_code_bytes)
             print(f"[RECEIVE] Op code decoded: {op_code}")
             decoded_message['op_code'] = op_code
-            
+
             # payload length (varint)
-            payload_length_bytes = self.recv_exact(2)
+            payload_length_bytes = self.recv_exact(1)
             if not payload_length_bytes:
                 print("[RECEIVE] Error: No data available for payload length")
                 raise Exception("No data available for payload length")
             payload_length, _ = varint_decode(payload_length_bytes)
             print(f"[RECEIVE] Payload length decoded: {payload_length} bytes")
             decoded_message['payload_length'] = payload_length
-            
+
             # field data
             field_data = self.recv_exact(payload_length)
             if not field_data:
                 print("[RECEIVE] Error: No data available for field data")
                 raise Exception("No data available for field data")
-            
+
             print(f"[RECEIVE] Received {len(field_data)} bytes of field data")
             type_value = None
             field_name_index = None
             field_length = None
-            
-            for i in range(len(field_data)):
-                byte = field_data[i]
-                if not type_value:
-                    type_value, field_name_index = unpack_two_nibbles(byte)
+            i = 0
+            while i < len(field_data):
+                if type_value is None:
+                    byte = field_data[i]
+                    type_value, field_name_index = unpack_two_nibbles(bytes([byte]))
                     print(f"[RECEIVE] Field type: {type_value}, Field name index: {field_name_index}")
-                elif not field_length:
+                    i += 1
+                elif field_length is None:
                     field_length, num_bytes = varint_decode(field_data[i:])
                     print(f"[RECEIVE] Field length: {field_length}, Number of bytes: {num_bytes}")
                     i += num_bytes
-                else: 
-                    if type_value == 0: # int
+                else:
+                    if type_value == 0:  # int
                         value, num_bytes = varint_decode(field_data[i:])
                         print(f"[RECEIVE] Decoded integer value: {value}")
                         i += num_bytes
-                    elif type_value == 1: # string
-                        value = field_data[i:field_length + i].decode('utf-8')
+                    elif type_value == 1:  # string
+                        value = field_data[i:i+field_length].decode('utf-8')
                         print(f"[RECEIVE] Decoded string value: {value}")
                         i += field_length
-                    elif type_value == 2: # List[str]
+                    elif type_value == 2:  # List[str]
                         value = []
                         print(f"[RECEIVE] Decoding list with {field_length} items")
                         for j in range(field_length):
@@ -360,91 +380,16 @@ class WireProtocol:
                             value.append(field_data[i:i+str_len].decode('utf-8'))
                             i += str_len
                         print(f"[RECEIVE] Decoded list value: {value}")
-                    else: 
+                    else:
                         print(f"[RECEIVE] Error: Invalid type value: {type_value}")
                         raise Exception("Invalid type value")
         except Exception as e:
             logger.error(f"[Client] Error reading protocol header: {e}")
             print(f"[RECEIVE] Error reading protocol header: {e}")
-        
+
         print(f"[RECEIVE] Successfully decoded message: {decoded_message}\n")
         return {
-            # "protocol_version": protocol_version,
             "op_code": op_code,
             "payload_length": payload_length,
             "status": "received"
         }
-
-
-# # ----------------------------------------------------------------------
-# # Example Usage
-# # ----------------------------------------------------------------------
-# if __name__ == "__main__": 
-#     # Test varint encoding/decoding
-#     print("Testing varint encoding/decoding...")
-#     test_num = 253408234098235
-#     encoded = varint_encode(test_num)
-#     decoded, num_bytes = varint_decode(encoded)
-#     print(f"Original: {test_num}, Encoded: {encoded}, Decoded: {decoded}, Bytes used: {num_bytes}")
-#     assert test_num == decoded, "Varint encoding/decoding failed"
-#     print("Varint test passed!\n")
-
-#     # Create a pair of connected sockets for testing
-#     server_sock, client_sock = socket.socketpair()
-    
-#     # Create protocol instances
-#     server_protocol = CustomWireProtocol(server_sock)
-#     client_protocol = CustomWireProtocol(client_sock)
-    
-#     # Test different message types
-#     print("Testing different message types...")
-    
-#     # Test 1: Message with integer field
-#     print("\nTest 1: Message with integer field")
-#     test_msg1 = {
-#         'protocol_version': 1,
-#         'op_code': 7,  # RetrieveNumUnread
-#         'payload': {
-#             'number_of_messages': 42
-#         }
-#     }
-#     client_protocol.send(test_msg1)
-    
-#     # Test 2: Message with string field
-#     print("\nTest 2: Message with string field")
-#     test_msg2 = {
-#         'protocol_version': 1,
-#         'op_code': 13,  # SendMessage
-#         'payload': {
-#             'sender': 'alice',
-#             'recipient': 'bob',
-#             'message': 'Hello, Bob!'
-#         }
-#     }
-#     client_protocol.send(test_msg2)
-    
-#     # Test 3: Message with list of strings
-#     print("\nTest 3: Message with list of strings")
-#     test_msg3 = {
-#         'protocol_version': 1,
-#         'op_code': 17,  # DeleteMessage
-#         'payload': {
-#             'username': 'alice',
-#             'message_ids': ['msg1', 'msg2', 'msg3']
-#         }
-#     }
-#     client_protocol.send(test_msg3)
-    
-#     # Receive and verify messages
-#     print("\nReceiving messages...")
-#     for i in range(3):
-#         received = server_protocol.receive()
-#         print(f"\nReceived message {i+1}:")
-#         print(f"Protocol version: {received['protocol_version']}")
-#         print(f"Op code: {received['op_code']}")
-#         print(f"Payload length: {received['payload_length']}")
-        
-#     # Clean up
-#     server_sock.close()
-#     client_sock.close()
-#     print("\nAll tests completed!")

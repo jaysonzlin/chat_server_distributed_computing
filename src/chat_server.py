@@ -26,10 +26,12 @@ if backend_path not in sys.path:
     sys.path.append(backend_path)
 
 from src.wire_protocols.json_wire_protocol import (
-    WireProtocol, error_response_msg, ok_response_msg, 
+     error_response_msg, ok_response_msg, 
     exists_response_msg, refresh_request_msg, unread_count_response_msg,
     messages_response_msg, account_list_response_msg
 )
+
+from src.wire_protocols.custom_wire_protocol import WireProtocol
 # from backend.wire_protocols.custom_wire_protocol import WireProtocol
 
 DATABASE_FILE = "chat_server_data.db"
