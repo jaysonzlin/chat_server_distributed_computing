@@ -157,7 +157,7 @@ class LoginPage(tk.Frame):
 
     def on_show(self):
         self.username_var.set(f"Username: {self.controller.selected_username}")
-        self.error_label.config(text="")
+        # Note: We no longer clear error_label here so that any error remains visible.
         self.password_var.set("")
 
     def on_submit(self):
@@ -166,7 +166,9 @@ class LoginPage(tk.Frame):
         self.controller.client.login(username, password)
 
     def show_error(self, message):
-        self.error_label.config(text=message)
+        # Display a prefixed error message on login failure.
+        self.error_label.config(text=f"Login failed: {message}")
+
 
 
 class AccountCreationPage(tk.Frame):

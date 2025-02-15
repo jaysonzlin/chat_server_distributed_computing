@@ -58,126 +58,230 @@ class WireProtocol:
         return json.loads(line.decode("utf-8"))
 
 # ----------------------------------------------------------------------
-# JSON Protocol Message Constructor Functions
-# Each message includes:
-#   - protocol_version (always 1)
-#   - op_code: the name of the action
+# Request message helper functions
 # ----------------------------------------------------------------------
 
-def account_creation_msg(username: str, password: str) -> Dict[str, Any]:
-    """
-    Constructs a message for creating an account.
-    
-    Inputs:
-        username: The user's login name.
-        password: The user's password (assumed to be hashed or secured as needed).
-    """
+def create_account_username_request_msg(username: str) -> Dict[str, Any]:
+    """Create a request message for checking username availability."""
     return {
         "protocol_version": 1,
-        "op_code": "account_creation",
-        "username": username,
-        "password": password,
+        "op_code": "create_account_username",
+        "payload": {
+            "username": username
+        }
     }
 
-def login_msg(username: str, password: str) -> Dict[str, Any]:
-    """
-    Constructs a message for logging in.
-    
-    Inputs:
-        username: The user's login name.
-        password: The user's password (assumed to be hashed or secured as needed).
-    """
+def create_account_password_request_msg(username: str, password: str) -> Dict[str, Any]:
+    """Create a request message for creating an account with password."""
+    return {
+        "protocol_version": 1,
+        "op_code": "create_account_password",
+        "payload": {
+            "username": username,
+            "password": password
+        }
+    }
+
+def login_request_msg(username: str, password: str) -> Dict[str, Any]:
+    """Create a login request message."""
     return {
         "protocol_version": 1,
         "op_code": "login",
-        "username": username,
-        "password": password,
+        "payload": {
+            "username": username,
+            "password": password
+        }
     }
 
-def retrieve_unread_count_msg(username: str) -> Dict[str, Any]:
-    """
-    Constructs a message to retrieve the number of unread messages.
-    
-    Inputs:
-        username: The user's login name.
-    """
-    return {
-        "protocol_version": 1,
-        "op_code": "retrieve_unread_count",
-        "username": username,
-    }
-
-def retrieve_unread_messages_msg(username: str, number: int) -> Dict[str, Any]:
-    """
-    Constructs a message to retrieve unread messages.
-    
-    Inputs:
-        username: The user's login name.
-        number: The number of unread messages to retrieve.
-    """
-    return {
-        "protocol_version": 1,
-        "op_code": "retrieve_unread_messages",
-        "username": username,
-        "number": number,
-    }
-
-def retrieve_read_messages_msg(username: str) -> Dict[str, Any]:
-    """
-    Constructs a message to retrieve read messages.
-    
-    Inputs:
-        username: The user's login name.
-    """
-    return {
-        "protocol_version": 1,
-        "op_code": "retrieve_read_messages",
-        "username": username,
-    }
-
-def send_message_msg(sender_username: str, recipient_username: str, message: str) -> Dict[str, Any]:
-    """
-    Constructs a message for sending a message.
-    
-    Inputs:
-        sender_username: The username of the sender.
-        recipient_username: The username of the recipient.
-        message: The text content of the message.
-    """
+def send_message_request_msg(sender: str, recipient: str, message: str) -> Dict[str, Any]:
+    """Create a request message for sending a message."""
     return {
         "protocol_version": 1,
         "op_code": "send_message",
-        "sender_username": sender_username,
-        "recipient_username": recipient_username,
-        "message": message,
+        "payload": {
+            "sender": sender,
+            "recipient": recipient,
+            "message": message
+        }
     }
 
-def delete_messages_msg(username: str, message_ids: List[int]) -> Dict[str, Any]:
-    """
-    Constructs a message to delete one or more messages.
-    
-    Inputs:
-        username: The recipient's (or user's) login name.
-        message_ids: A list of message identifiers to delete.
-    """
+def retrieve_unread_count_request_msg(username: str) -> Dict[str, Any]:
+    """Create a request message for retrieving unread message count."""
+    return {
+        "protocol_version": 1,
+        "op_code": "retrieve_unread_count",
+        "payload": {
+            "username": username
+        }
+    }
+
+def load_unread_messages_request_msg(username: str, number_of_messages: int = 10) -> Dict[str, Any]:
+    """Create a request message for loading unread messages."""
+    return {
+        "protocol_version": 1,
+        "op_code": "load_unread_messages",
+        "payload": {
+            "username": username,
+            "number_of_messages": number_of_messages
+        }
+    }
+
+def load_read_messages_request_msg(username: str, number_of_messages: int = 10) -> Dict[str, Any]:
+    """Create a request message for loading read messages."""
+    return {
+        "protocol_version": 1,
+        "op_code": "load_read_messages",
+        "payload": {
+            "username": username,
+            "number_of_messages": number_of_messages
+        }
+    }
+
+def delete_messages_request_msg(username: str, message_ids: List[str]) -> Dict[str, Any]:
+    """Create a request message for deleting messages."""
     return {
         "protocol_version": 1,
         "op_code": "delete_messages",
-        "username": username,
-        "message_ids": message_ids,
+        "payload": {
+            "username": username,
+            "message_ids": message_ids
+        }
     }
 
-def delete_account_msg(username: str) -> Dict[str, Any]:
-    """
-    Constructs a message to delete an account.
-    
-    Inputs:
-        username: The user's login name.
-    """
+def delete_account_request_msg(username: str) -> Dict[str, Any]:
+    """Create a request message for deleting an account."""
     return {
         "protocol_version": 1,
         "op_code": "delete_account",
-        "username": username,
+        "payload": {
+            "username": username
+        }
+    }
+
+def list_accounts_request_msg() -> Dict[str, Any]:
+    """Create a request message for listing all accounts."""
+    return {
+        "protocol_version": 1,
+        "op_code": "list_accounts",
+        "payload": {}
+    }
+
+def quit_request_msg(username: str) -> Dict[str, Any]:
+    """Create a request message for quitting/logging out."""
+    return {
+        "protocol_version": 1,
+        "op_code": "quit",
+        "payload": {
+            "username": username
+        }
+    }
+
+# ----------------------------------------------------------------------
+# JSON Protocol Response Message Constructor Functions
+# Each response includes:
+#   - protocol_version (always 1)
+#   - op_code: the name of the action or response type
+#   - payload: the response data
+# ----------------------------------------------------------------------
+
+def error_response_msg(message: str) -> Dict[str, Any]:
+    """
+    Constructs an error response message.
+    
+    Args:
+        message: The error message to send.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "error",
+        "payload": {
+            "message": message
+        }
+    }
+
+def ok_response_msg(message: str = "Operation successful.") -> Dict[str, Any]:
+    """
+    Constructs a success response message.
+    
+    Args:
+        message: Optional success message.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "ok",
+        "payload": {
+            "message": message
+        }
+    }
+
+def exists_response_msg(message: str = "Resource already exists.") -> Dict[str, Any]:
+    """
+    Constructs an exists response message.
+    
+    Args:
+        message: Optional exists message.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "exists",
+        "payload": {
+            "message": message
+        }
+    }
+
+def refresh_request_msg() -> Dict[str, Any]:
+    """
+    Constructs a refresh request message.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "refresh_request",
+        "payload": {}
+    }
+
+def unread_count_response_msg(count: int) -> Dict[str, Any]:
+    """
+    Constructs a response for unread message count.
+    
+    Args:
+        count: The number of unread messages.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "ok",
+        "payload": {
+            "count": count
+        }
+    }
+
+def messages_response_msg(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Constructs a response containing messages.
+    
+    Args:
+        messages: List of message objects.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "ok",
+        "payload": {
+            "messages": messages
+        }
+    }
+
+def account_list_response_msg(accounts: List[str]) -> Dict[str, Any]:
+    """
+    Constructs a response containing list of accounts.
+    
+    Args:
+        accounts: List of usernames.
+    """
+    return {
+        "protocol_version": 1,
+        "op_code": "ok",
+        "payload": {
+            "accounts": accounts
+        }
     }
 
 # ----------------------------------------------------------------------

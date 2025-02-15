@@ -15,12 +15,20 @@ import socket
 import threading
 import sys
 import os
+from typing import Optional, List, Dict
 
 backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_path not in sys.path:
     sys.path.append(backend_path)
-from backend.wire_protocols.json_wire_protocol import WireProtocol
-# from backend.wire_protocols.custom_wire_protocol import WireProtocol
+from src.wire_protocols.json_wire_protocol import (
+    WireProtocol, error_response_msg, ok_response_msg,
+    create_account_username_request_msg, create_account_password_request_msg,
+    login_request_msg, send_message_request_msg, retrieve_unread_count_request_msg,
+    load_unread_messages_request_msg, load_read_messages_request_msg,
+    delete_messages_request_msg, delete_account_request_msg,
+    list_accounts_request_msg, quit_request_msg
+)
+
 class ChatClient:
     def __init__(self, host="127.0.0.1", port=5452):
         self.host = host
@@ -88,51 +96,30 @@ class ChatClient:
     # ------------------ Client API Methods ------------------
     #
     def account_creation_username(self, username: str):
-        request = {
-            "op_code": "create_account_username",
-            "payload": {"username": username}
-        }
+        request = create_account_username_request_msg(username)
         self._send(request)
 
     def account_creation_password(self, username: str, password: str):
-        request = {
-            "op_code": "create_account_password",
-            "payload": {
-                "username": username,
-                "password": password
-            }
-        }
+        request = create_account_password_request_msg(username, password)
         self._send(request)
 
     def login(self, username: str, password: str):
         self.current_user = username
-        request = {
-            "op_code": "login",
-            "payload": {
-                "username": username,
-                "password": password
-            }
-        }
+        request = login_request_msg(username, password)
         self._send(request)
 
     def send_message(self, recipient: str, message: str):
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
-        request = {
-            "op_code": "send_message",
-            "payload": {
-                "sender": self.current_user,
-                "recipient": recipient,
-                "message": message
-            }
-        }
+        request = send_message_request_msg(self.current_user, recipient, message)
         self._send(request)
 
     def read_message(self, message_id: str):
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
+        # No request helper function for read_message, keeping the original implementation
         request = {
             "op_code": "read_message",
             "payload": {
@@ -146,67 +133,40 @@ class ChatClient:
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
-        request = {
-            "op_code": "load_unread_messages",
-            "payload": {
-                "username": self.current_user,
-                "number_of_messages": n
-            }
-        }
+        request = load_unread_messages_request_msg(self.current_user, n)
         self._send(request)
 
     def load_read_messages(self, n=5):
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
-        request = {
-            "op_code": "load_read_messages",
-            "payload": {
-                "username": self.current_user,
-                "number_of_messages": n
-            }
-        }
+        request = load_read_messages_request_msg(self.current_user, n)
         self._send(request)
 
     def delete_messages(self, message_ids: list):
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
-        request = {
-            "op_code": "delete_messages",
-            "payload": {
-                "username": self.current_user,
-                "message_ids": message_ids
-            }
-        }
+        request = delete_messages_request_msg(self.current_user, message_ids)
         self._send(request)
 
     def delete_account(self):
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
-        request = {
-            "op_code": "delete_account",
-            "payload": {"username": self.current_user}
-        }
+        request = delete_account_request_msg(self.current_user)
         self._send(request)
         self.current_user = None
 
     def list_accounts(self):
-        request = {
-            "op_code": "list_accounts",
-            "payload": {}
-        }
+        request = list_accounts_request_msg()
         self._send(request)
 
     def retrieve_number_of_unread_messages(self):
         if not self.current_user:
             print("[CLIENT WARNING] No user is logged in.")
             return
-        request = {
-            "op_code": "retrieve_unread_count",
-            "payload": {"username": self.current_user}
-        }
+        request = retrieve_unread_count_request_msg(self.current_user)
         self._send(request)
 
     def quit(self):
@@ -214,10 +174,7 @@ class ChatClient:
         Mark user offline (if logged in), then close.
         """
         if self.current_user:
-            request = {
-                "op_code": "quit",
-                "payload": {"username": self.current_user}
-            }
+            request = quit_request_msg(self.current_user)
             self._send(request)
             self.current_user = None
 
