@@ -167,11 +167,11 @@ number_to_op_code = {
 
 
 def pack_two_nibbles(type_value, field_name_index):
-    if not (0 <= type_value <= 15 and 0 <= field_name_index <= 15):
+    if not (0 <= type_value <= 15 and 0 <= field_name_index <= 31):
         raise ValueError("Both numbers must be between 0 and 15 (inclusive).")
 
     # Shift first number left by 4 bits and combine with second number
-    byte_value = (type_value << 4) | field_name_index
+    byte_value = (type_value << 5) | field_name_index
 
     # Convert to bytes
     return bytes([byte_value])
@@ -192,8 +192,8 @@ def unpack_two_nibbles(byte_value: bytes) -> tuple[int, int]:
 
     # Convert bytes to int and extract nibbles
     value = byte_value[0]
-    type_value = (value >> 4) & 0x0F  # Get upper 4 bits
-    field_name_index = value & 0x0F    # Get lower 4 bits
+    type_value = (value >> 5) & 0x0F  # Get upper 3 bits
+    field_name_index = value & 0x1F    # Get lower 5 bits
 
     return (type_value, field_name_index)
 
@@ -251,7 +251,7 @@ class WireProtocol:
             if isinstance(value, int):
                 # For integers, encode as varint
                 field_data += pack_two_nibbles(0,
-                                               field_names_reverse_mapping[field])
+                                               field_names_mapping[field])
                 encoded_int = varint_encode(value)
                 num_bytes = len(encoded_int)
                 encoded_num_bytes = varint_encode(num_bytes)
@@ -277,7 +277,7 @@ class WireProtocol:
             elif isinstance(value, list) and all(isinstance(x, str) for x in value):
                 # For list of strings, first encode list length, then each string
                 field_data += pack_two_nibbles(2,
-                                               field_names_reverse_mapping[field])
+                                               field_names_mapping[field])
                 field_data += varint_encode(len(value))
                 for item in value:
                     encoded_item = item.encode('utf-8')
