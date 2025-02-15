@@ -61,24 +61,10 @@ def varint_decode(data: bytes) -> int:
 
 
 # unique field names
-field_names = {
-    "username": 0,
-    "hashed_password": 1,
-    "session_status": 2,
-    "messages": 3,
-    "message_id": 4,
-    "recipient": 5,
-    "sender": 6,
-    "message": 7,
-    "read": 8,
-    "timestamp": 9,
-    "password": 10
-}
-
 
 field_names_reverse_mapping = {
     0: "username",
-    1: "hashed_password",
+    1: "password",
     2: "session_status",
     3: "messages",
     4: "message_id",
@@ -89,12 +75,19 @@ field_names_reverse_mapping = {
     9: "timestamp",
     10: "number_of_messages",
     11: "message_ids",
-    12: "status"
+    12: "status", 
+    13: "unread_count", 
+    14: "count",
+    15: "deleted_message_ids",
+    16: "accounts"
 }
+
+
+
 
 field_names_mapping = {
     "username": 0,
-    "hashed_password": 1,
+    "password": 1,
     "session_status": 2,
     "messages": 3,
     "message_id": 4,
@@ -106,13 +99,16 @@ field_names_mapping = {
     "number_of_messages": 10,
     "message_ids": 11,
     "status": 12,
-    "unread_count": 13
+    "unread_count": 13, 
+    "count": 14, 
+    "deleted_message_ids": 15,
+    "accounts": 16
 }
 
 op_code_to_fields = {
     "create_account_username": ["username"],
-    "create_account_password": ["username", "hashed_password"],
-    "login": ["username", "hashed_password"],
+    "create_account_password": ["username", "password"],
+    "login": ["username", "password"],
     "retrieve_unread_count": ["username"],
     "send_message": ["sender", "recipient", "message"],
     "read_message": ["username", "message_id"],
@@ -128,6 +124,8 @@ op_code_to_fields = {
     "ok": ["message", "unread_count", "message_id", "messages", "deleted_message_ids",
            "accounts"]
 }
+
+
 
 op_code_to_number = {
     "create_account_username": 0,
@@ -146,7 +144,25 @@ op_code_to_number = {
     "error": 13,
     "exists": 14,
     "ok": 15,
-    "refresh_request": 16
+}
+
+number_to_op_code = {
+    0: "create_account_username",
+    1: "create_account_password",
+    2: "login",
+    3: "retrieve_unread_count",
+    4: "send_message",
+    5: "read_message",
+    6: "load_unread_messages",
+    7: "load_read_messages",
+    8: "delete_messages",
+    9: "delete_account",
+    10: "list_accounts",
+    11: "quit",
+    12: "refresh_request",
+    13: "error",
+    14: "exists",
+    15: "ok",
 }
 
 
@@ -246,9 +262,9 @@ class WireProtocol:
             elif isinstance(value, str):
                 # For strings, encode length as varint followed by UTF-8 bytes
                 print(f"[SEND] String field '{field}' - Raw value: {value}")
-                field_data += pack_two_nibbles(1, field_names[field])
+                field_data += pack_two_nibbles(1, field_names_mapping[field])
                 print(
-                    f"[SEND] Added type nibble (1) and field name index ({field_names[field]})")
+                    f"[SEND] Added type nibble (1) and field name index ({field_names_mapping[field]})")
                 encoded_str = value.encode('utf-8')
                 print(f"[SEND] UTF-8 encoded string: {encoded_str}")
                 num_bytes = len(encoded_str)
@@ -315,14 +331,14 @@ class WireProtocol:
         # protocol header
         try:
             # protocol version (1 byte)
-            decoded_message = {}
+    
             # protocol_version_bytes = self.sock.recv(1)
             # if not protocol_version_bytes:
             #     raise Exception("No data available for protocol version")
             # protocol_version, _ = varint_decode(protocol_version_bytes)
             # logger.info(f"Protocol version: {protocol_version}")
             # decoded_message['protocol_version'] = protocol_version
-
+            payload = {}
             # op code (1 byte)
             op_code_bytes = self.recv_exact(1)
             if not op_code_bytes:
@@ -330,7 +346,7 @@ class WireProtocol:
                 raise Exception("No data available for op code")
             op_code, _ = varint_decode(op_code_bytes)
             print(f"[RECEIVE] Op code decoded: {op_code}")
-            decoded_message['op_code'] = op_code
+
 
             # payload length (varint)
             payload_length_bytes = self.recv_exact(1)
@@ -339,7 +355,6 @@ class WireProtocol:
                 raise Exception("No data available for payload length")
             payload_length, _ = varint_decode(payload_length_bytes)
             print(f"[RECEIVE] Payload length decoded: {payload_length} bytes")
-            decoded_message['payload_length'] = payload_length
 
             # field data
             field_data = self.recv_exact(payload_length)
@@ -352,6 +367,9 @@ class WireProtocol:
             field_name_index = None
             field_length = None
             i = 0
+            # every field will be 1 byte for type_value & field name, 
+            # then varint bytes for the field length, 
+            # and then field length bytes for the value
             while i < len(field_data):
                 if type_value is None:
                     byte = field_data[i]
@@ -361,7 +379,7 @@ class WireProtocol:
                 elif field_length is None:
                     field_length, num_bytes = varint_decode(field_data[i:])
                     print(f"[RECEIVE] Field length: {field_length}, Number of bytes: {num_bytes}")
-                    i += num_bytes
+                    i += num_bytes   
                 else:
                     if type_value == 0:  # int
                         value, num_bytes = varint_decode(field_data[i:])
@@ -383,13 +401,19 @@ class WireProtocol:
                     else:
                         print(f"[RECEIVE] Error: Invalid type value: {type_value}")
                         raise Exception("Invalid type value")
+                    payload[field_names_reverse_mapping[field_name_index]] = value
+                    type_value = None
+                    field_length = None
+                    field_name_index = None
         except Exception as e:
             logger.error(f"[Client] Error reading protocol header: {e}")
             print(f"[RECEIVE] Error reading protocol header: {e}")
 
-        print(f"[RECEIVE] Successfully decoded message: {decoded_message}\n")
+        print("op_code: ", op_code)
+        print("number_to_op_code[op_code]: ", number_to_op_code[op_code])
+        print("payload", payload)
         return {
-            "op_code": op_code,
-            "payload_length": payload_length,
+            "op_code": number_to_op_code[op_code],
+            "payload": payload,
             "status": "received"
         }

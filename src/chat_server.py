@@ -25,14 +25,7 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_path not in sys.path:
     sys.path.append(backend_path)
 
-from src.wire_protocols.json_wire_protocol import (
-     error_response_msg, ok_response_msg, 
-    exists_response_msg, refresh_request_msg, unread_count_response_msg,
-    messages_response_msg, account_list_response_msg
-)
-
 from src.wire_protocols.custom_wire_protocol import WireProtocol
-# from backend.wire_protocols.custom_wire_protocol import WireProtocol
 
 DATABASE_FILE = "chat_server_data.db"
 
@@ -116,7 +109,13 @@ def send_error(wire_protocol: WireProtocol, message: str):
     Helper: send an error response to client using 'op_code'='error' 
     and putting everything else in 'payload'.
     """
-    server_send(wire_protocol, error_response_msg(message))
+    response = {
+        "op_code": "error",
+        "payload": {
+            "message": message
+        }
+    }
+    server_send(wire_protocol, response)
 
 
 # ----------------------------------------------------------------------
@@ -127,9 +126,19 @@ def send_error(wire_protocol: WireProtocol, message: str):
 def handle_account_creation_username(wire_protocol: WireProtocol, payload: dict):
     username = payload.get("username")
     if username in user_db:
-        response = exists_response_msg("Username already exists. Please provide password.")
+        response = {
+            "op_code": "exists",  # Instead of "status": "exists"
+            "payload": {
+                "message": "Username already exists. Please provide password."
+            }
+        }
     else:
-        response = ok_response_msg("Username available for creation.")
+        response = {
+            "op_code": "ok",  # Instead of "status": "ok"
+            "payload": {
+                "message": "Username available for creation."
+            }
+        }
 
     server_send(wire_protocol, response)
     print("[SERVER] user_db after handle_account_creation_username:")
@@ -148,10 +157,17 @@ def handle_account_creation_password(wire_protocol: WireProtocol, payload: dict)
         }
         save_database()
 
-        response = ok_response_msg("Account created successfully.")
+        response = {
+            "op_code": "ok",
+            "payload": {
+                "message": "Account created successfully."
+            }
+        }
         server_send(wire_protocol, response)
     else:
-        send_error(wire_protocol, "Account creation failed. Username already in use.")
+        send_error(wire_protocol,
+                   "Account creation failed. Username already in use.")
+
 
 
 def handle_login(wire_protocol: WireProtocol, payload: dict):
@@ -167,7 +183,12 @@ def handle_login(wire_protocol: WireProtocol, payload: dict):
             # Store ephemeral reference in active_connections
             active_connections[username] = wire_protocol
 
-            response = ok_response_msg("Login successful.")
+            response = {
+                "op_code": "ok",
+                "payload": {
+                    "message": "Login successful."
+                }
+            }
             server_send(wire_protocol, response)
         else:
             send_error(wire_protocol, "Incorrect password.")
@@ -177,131 +198,239 @@ def handle_login(wire_protocol: WireProtocol, payload: dict):
 
 def handle_retrieve_unread_count(wire_protocol: WireProtocol, payload: dict):
     username = payload.get("username")
-    if username in user_db and user_db[username]["session_status"] == "online":
-        unread_count = sum(1 for msg in user_db[username]["messages"] if not msg["read"])
-        response = unread_count_response_msg(unread_count)
-        server_send(wire_protocol, response)
-    else:
+
+    if username not in user_db or user_db[username]["session_status"] != "online":
         send_error(wire_protocol, "User not online or does not exist.")
+        return
+
+    messages = user_db[username]["messages"]
+    unread_count = sum(not m["read"] for m in messages)
+
+    response = {
+        "op_code": "ok",
+        "payload": {
+            "unread_count": unread_count
+        }
+    }
+    server_send(wire_protocol, response)
 
 
 def handle_send_message(wire_protocol: WireProtocol, payload: dict):
+    """
+    If recipient is offline => read=False (default).
+    If recipient is online => read=True, push refresh_request.
+    """
     sender = payload.get("sender")
     recipient = payload.get("recipient")
-    message = payload.get("message")
+    message_text = payload.get("message")
 
-    # Verify sender exists and is online
+    # Validate sender is online
     if sender not in user_db or user_db[sender]["session_status"] != "online":
         send_error(wire_protocol, "Sender is not online or does not exist.")
         return
 
-    # Verify recipient exists
+    # Validate recipient
     if recipient not in user_db:
         send_error(wire_protocol, f"Recipient '{recipient}' does not exist.")
         return
 
-    # Create and store the message
-    msg_obj = create_message_object(sender, recipient, message)
-    
-    # If recipient is online, mark as read and send refresh request
-    if user_db[recipient]["session_status"] == "online":
-        msg_obj["read"] = True
+    message_obj = create_message_object(sender, recipient, message_text)
 
-    # Store message in recipient's messages
-    user_db[recipient]["messages"].append(msg_obj)
+    # If recipient is online, set read=True
+    if user_db[recipient]["session_status"] == "online":
+        message_obj["read"] = True
+
+    # Append to recipient's messages
+    user_db[recipient]["messages"].append(message_obj)
     save_database()
 
-    # Send success response to sender
-    response_to_sender = ok_response_msg("Message sent successfully.")
+    # Acknowledge to sender
+    response_to_sender = {
+        "op_code": "ok",
+        "payload": {
+            "message": "Message sent successfully.",
+            "message_id": message_obj["message_id"]
+        }
+    }
     server_send(wire_protocol, response_to_sender)
 
-    # If recipient is online, send them a refresh request
+    # If recipient is online, push a "refresh_request"
     if user_db[recipient]["session_status"] == "online":
         recipient_wire = active_connections.get(recipient)
         if recipient_wire:
-            refresh_msg = refresh_request_msg()
+            refresh_msg = {
+                "op_code": "refresh_request",
+                "payload": {
+                    "message": "You have a new message. Please refresh."
+                }
+            }
             server_send(recipient_wire, refresh_msg)
 
 
-def handle_load_unread_messages(wire_protocol: WireProtocol, payload: dict):
+def handle_read_message(wire_protocol: WireProtocol, payload: dict):
+    """
+    Mark a single message as read given message_id and username.
+    """
     username = payload.get("username")
-    number = payload.get("number_of_messages", 10)
+    message_id = payload.get("message_id")
 
-    if username in user_db and user_db[username]["session_status"] == "online":
-        unread_messages = [
-            msg for msg in user_db[username]["messages"]
-            if not msg["read"]
-        ][:number]
-        response = messages_response_msg(unread_messages)
-        server_send(wire_protocol, response)
-    else:
+    if username not in user_db or user_db[username]["session_status"] != "online":
         send_error(wire_protocol, "User not online or does not exist.")
+        return
+
+    user_messages = user_db[username]["messages"]
+    target_message = None
+    for msg in user_messages:
+        if msg["message_id"] == message_id:
+            target_message = msg
+            break
+
+    if not target_message:
+        send_error(wire_protocol, f"Message with ID {message_id} not found.")
+        return
+
+    target_message["read"] = True
+    save_database()
+
+    response = {
+        "op_code": "ok",
+        "payload": {
+            "message": f"Message {message_id} marked as read."
+        }
+    }
+    server_send(wire_protocol, response)
+
+
+def handle_load_unread_messages(wire_protocol: WireProtocol, payload: dict):
+    """
+    Returns up to n unread messages, does NOT mark them as read.
+    """
+    username = payload.get("username")
+    n = payload.get("number_of_messages", 5)
+
+    if username not in user_db or user_db[username]["session_status"] != "online":
+        send_error(wire_protocol, "User not online or does not exist.")
+        return
+
+    all_messages = user_db[username]["messages"]
+    unread = [m for m in all_messages if not m["read"]]
+    sorted_unread = sorted(unread, key=lambda m: m["timestamp"], reverse=True)
+    requested_msgs = sorted_unread[:n]
+
+    response = {
+        "op_code": "ok",
+        "payload": {
+            "messages": requested_msgs
+        }
+    }
+    server_send(wire_protocol, response)
 
 
 def handle_load_read_messages(wire_protocol: WireProtocol, payload: dict):
+    """
+    Returns up to n read messages.
+    """
     username = payload.get("username")
-    number = payload.get("number_of_messages", 10)
+    n = payload.get("number_of_messages", 5)
 
-    if username in user_db and user_db[username]["session_status"] == "online":
-        read_messages = [
-            msg for msg in user_db[username]["messages"]
-            if msg["read"]
-        ][:number]
-        response = messages_response_msg(read_messages)
-        server_send(wire_protocol, response)
-    else:
+    if username not in user_db or user_db[username]["session_status"] != "online":
         send_error(wire_protocol, "User not online or does not exist.")
+        return
+
+    all_messages = user_db[username]["messages"]
+    read_msgs = [m for m in all_messages if m["read"]]
+    sorted_read = sorted(read_msgs, key=lambda m: m["timestamp"], reverse=True)
+    requested_msgs = sorted_read[:n]
+
+    response = {
+        "op_code": "ok",
+        "payload": {
+            "messages": requested_msgs
+        }
+    }
+    server_send(wire_protocol, response)
 
 
 def handle_delete_messages(wire_protocol: WireProtocol, payload: dict):
     username = payload.get("username")
-    message_ids = payload.get("message_ids", [])
+    message_ids = payload.get("message_ids") or []
 
-    if username in user_db and user_db[username]["session_status"] == "online":
-        # Filter out messages with the specified IDs
-        user_db[username]["messages"] = [
-            msg for msg in user_db[username]["messages"]
-            if msg["message_id"] not in message_ids
-        ]
-        save_database()
-
-        response = ok_response_msg("Messages deleted successfully.")
-        server_send(wire_protocol, response)
-    else:
+    if username not in user_db or user_db[username]["session_status"] != "online":
         send_error(wire_protocol, "User not online or does not exist.")
+        return
+
+    user_messages = user_db[username]["messages"]
+    deleted = []
+    remaining = []
+
+    for msg in user_messages:
+        if msg["message_id"] in message_ids:
+            deleted.append(msg["message_id"])
+        else:
+            remaining.append(msg)
+
+    user_db[username]["messages"] = remaining
+    save_database()
+
+    response = {
+        "op_code": "ok",
+        "payload": {
+            "deleted_message_ids": deleted
+        }
+    }
+    server_send(wire_protocol, response)
 
 
 def handle_delete_account(wire_protocol: WireProtocol, payload: dict):
     username = payload.get("username")
 
     if username in user_db:
-        # Remove from active connections if online
-        if username in active_connections:
-            del active_connections[username]
-        # Remove from user database
         del user_db[username]
         save_database()
 
-        response = ok_response_msg("Account deleted successfully.")
+        response = {
+            "op_code": "ok",
+            "payload": {
+                "message": f"Account '{username}' deleted successfully."
+            }
+        }
         server_send(wire_protocol, response)
     else:
         send_error(wire_protocol, "User account not found.")
 
 
 def handle_list_accounts(wire_protocol: WireProtocol, payload: dict):
-    response = account_list_response_msg(list(user_db.keys()))
+    """
+    Return the list of all usernames, no login required.
+    """
+    all_usernames = list(user_db.keys())
+    response = {
+        "op_code": "ok",
+        "payload": {
+            "accounts": all_usernames
+        }
+    }
     server_send(wire_protocol, response)
 
 
 def handle_quit(wire_protocol: WireProtocol, payload: dict):
     username = payload.get("username")
+
     if username in user_db:
         user_db[username]["session_status"] = "offline"
+        save_database()
+
+        response = {
+            "op_code": "ok",
+            "payload": {
+                "message": f"User '{username}' marked as offline."
+            }
+        }
+        server_send(wire_protocol, response)
+
+        # Remove ephemeral reference if present
         if username in active_connections:
             del active_connections[username]
-        save_database()
-        response = ok_response_msg("Logged out successfully.")
-        server_send(wire_protocol, response)
     else:
         send_error(wire_protocol, "User not found.")
 
