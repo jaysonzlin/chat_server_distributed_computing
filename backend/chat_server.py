@@ -25,7 +25,7 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if backend_path not in sys.path:
     sys.path.append(backend_path)
 
-from src.wire_protocols.json_wire_protocol import WireProtocol
+from backend.wire_protocols.json_wire_protocol import WireProtocol
 # from backend.wire_protocols.custom_wire_protocol import WireProtocol
 
 DATABASE_FILE = "chat_server_data.db"
