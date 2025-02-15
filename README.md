@@ -2,6 +2,8 @@
 
 A distributed chat server application that supports both GUI and CLI interfaces. Users can create accounts, send messages, and manage their chat history.
 
+https://youtu.be/Lq4skFlbjKA?si=3zvkBfErAt3WHU1Z
+
 ## Running the Application
 
 ### Option 1: GUI Interface
